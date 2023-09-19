@@ -6,9 +6,9 @@ import (
 	"io"
 	"strconv"
 	"strings"
-
-	"github.com/o5h/glm"
 )
+
+type Vec3 [3]float32
 
 type Solid struct {
 	Name   string
@@ -25,15 +25,15 @@ func (s *Solid) AddFacet(f Facet) {
 }
 
 type Facet struct {
-	Normal   glm.Vec3
-	Vertices []glm.Vec3
+	Normal   Vec3
+	Vertices []Vec3
 }
 
-func NewFacet(n glm.Vec3) *Facet {
-	return &Facet{n, make([]glm.Vec3, 0, 3)}
+func NewFacet(n Vec3) *Facet {
+	return &Facet{n, make([]Vec3, 0, 3)}
 }
 
-func (f *Facet) AddVec3(v glm.Vec3) {
+func (f *Facet) AddVec3(v Vec3) {
 	f.Vertices = append(f.Vertices, v)
 }
 
@@ -44,7 +44,7 @@ func (s *Solid) ReadFrom(ior io.Reader) (n int64, err error) {
 
 	s.Name = hl[1]
 	var facet *Facet
-	for true {
+	for {
 		line, _, err = r.ReadLine()
 		if err == io.EOF {
 			break
@@ -52,18 +52,23 @@ func (s *Solid) ReadFrom(ior io.Reader) (n int64, err error) {
 		fs := strings.Fields(string(line))
 		switch fs[0] {
 		case "facet":
-			facet = new(Facet)
-			err = sliceToVec3(fs[2:5], &facet.Normal)
+			facet = &Facet{}
+			sliceToVec3(fs[2:5], &facet.Normal)
 		case "outer":
 		case "vertex":
-			v := &glm.Vec3{}
-			err = sliceToVec3(fs[1:4], v)
-			facet.AddVec3(*v)
+			v := Vec3{}
+			sliceToVec3(fs[1:4], &v)
+			facet.AddVec3(v)
 		case "endloop":
 		case "endfacet":
 			s.AddFacet(*facet)
+		case "endsolid":
+			if s.Name != hl[1] {
+				err = fmt.Errorf("expected  %v. was %v", s.Name, hl[1])
+			}
+			return
 		default:
-			err = fmt.Errorf("Unknown token %s", fs[0])
+			err = fmt.Errorf("unknown token %s", fs[0])
 		}
 
 		if err != nil {
@@ -73,21 +78,24 @@ func (s *Solid) ReadFrom(ior io.Reader) (n int64, err error) {
 	return
 }
 
-func sliceToVec3(fs []string, v *glm.Vec3) (err error) {
-	x, _ := strconv.ParseFloat(fs[0], 32)
-	y, _ := strconv.ParseFloat(fs[1], 32)
-	z, _ := strconv.ParseFloat(fs[2], 32)
-	v.SetXYZ(float32(x), float32(y), float32(z))
-	return
+func parseFloat32(s string) float32 {
+	f, _ := strconv.ParseFloat(s, 32)
+	return float32(f)
+}
+
+func sliceToVec3(fs []string, v *Vec3) {
+	v[0] = parseFloat32(fs[0])
+	v[1] = parseFloat32(fs[1])
+	v[2] = parseFloat32(fs[2])
 }
 
 func (s *Solid) WriteTo(w io.Writer) (n int64, err error) {
 	fmt.Fprintf(w, "solid %v\n", s.Name)
 	for _, f := range s.Facets {
-		fmt.Fprintf(w, "  facet normal %.1f %.1f %.1f\n", f.Normal.X, f.Normal.Y, f.Normal.Z)
+		fmt.Fprintf(w, "  facet normal %.6f %.6f %.6f\n", f.Normal[0], f.Normal[1], f.Normal[2])
 		fmt.Fprintln(w, "    outer loop")
 		for _, v := range f.Vertices {
-			fmt.Fprintf(w, "      vertex %.1f %.1f %.1f\n", v.X, v.Y, v.Z)
+			fmt.Fprintf(w, "      vertex %.6f %.6f %.6f\n", v[0], v[1], v[2])
 
 		}
 		fmt.Fprintln(w, "    endloop")
