@@ -15,9 +15,8 @@ type Solid struct {
 	Facets []Facet
 }
 
-func New(name string, numFaces int) (s *Solid) {
-	s = &Solid{name, make([]Facet, 0, numFaces)}
-	return
+func New(name string, numFaces int) *Solid {
+	return &Solid{name, make([]Facet, 0, numFaces)}
 }
 
 func (s *Solid) AddFacet(f Facet) {
